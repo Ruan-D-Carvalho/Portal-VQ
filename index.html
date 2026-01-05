@@ -1080,10 +1080,14 @@
                 
                 let filteredQuestions = questions;
                 if (this.filterChannelId !== 'all') {
-                    const validIndicatorIds = DataManager.db.indicators
-                        .filter(i => i.channelId == this.filterChannelId)
-                        .map(i => i.id);
-                    filteredQuestions = questions.filter(q => validIndicatorIds.includes(q.indicatorId));
+                    // Atualizado: Tenta filtrar direto pela coluna channelId (mais rápido), 
+                    // com fallback para a lógica antiga (via indicador) caso o dado em memória ainda não tenha o ID.
+                    filteredQuestions = questions.filter(q => {
+                        if (q.channelId) return q.channelId == this.filterChannelId;
+                        // Fallback
+                        const ind = DataManager.db.indicators.find(i => i.id == q.indicatorId);
+                        return ind && ind.channelId == this.filterChannelId;
+                    });
                 }
 
                 return `
@@ -1136,8 +1140,12 @@
                 
                 let initialChannelId = "";
                 if (item) {
-                    const ind = DataManager.db.indicators.find(i => i.id == item.indicatorId);
-                    if (ind) initialChannelId = ind.channelId;
+                    // Atualizado: Usa o channelId direto se existir, senão procura pelo indicador
+                    initialChannelId = item.channelId;
+                    if (!initialChannelId) {
+                        const ind = DataManager.db.indicators.find(i => i.id == item.indicatorId);
+                        if (ind) initialChannelId = ind.channelId;
+                    }
                 }
 
                 const channels = DataManager.db.channels;
@@ -1209,10 +1217,12 @@
                 const text = document.getElementById('q-text').value;
                 const indicatorId = document.getElementById('q-ind').value;
                 const severity = document.getElementById('q-sev').value;
+                const channelId = document.getElementById('q-channel').value; // Novo: Captura o valor do Canal
                 
-                if(!text || !indicatorId) return alert("Preencha todos os campos.");
+                if(!text || !indicatorId || !channelId) return alert("Preencha todos os campos.");
                 
-                const obj = { id: id || undefined, text, indicatorId, severity };
+                // Novo: Inclui channelId no objeto a salvar
+                const obj = { id: id || undefined, text, indicatorId, severity, channelId };
                 if(id) await DataManager.updateItem('questions', obj); else await DataManager.addItem('questions', obj);
                 document.getElementById('modal-container').innerHTML = ''; App.navigate('settings-questions');
             }
