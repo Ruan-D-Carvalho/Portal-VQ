@@ -1055,7 +1055,7 @@
         };
 
         const SettingsIndicatorController = {
-            render() { return `<div class="card"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Indicadores</h3><button class="btn btn-primary btn-sm" onclick="SettingsIndicatorController.openModal()"><i class="ph ph-plus"></i> Novo Indicador</button></div><div class="table-container"><table><thead><tr><th>Nome</th><th>Canal</th><th class="text-right">Ações</th></tr></thead><tbody>${DataManager.db.indicators.map(i => {const c = DataManager.getChannel(i.channelId); return `<tr><td class="font-bold">${i.name}</td><td>${c?c.name:'N/A'}</td><td class="text-right"><button class="btn btn-outline btn-sm" onclick="SettingsIndicatorController.openModal(${i.id})"><i class="ph ph-pencil-simple"></i></button><button class="btn btn-danger btn-sm" onclick="if(confirm('Excluir?')) { DataManager.deleteItem('indicators', ${i.id}); setTimeout(()=>App.navigate('settings-indicators'),200); }"><i class="ph ph-trash"></i></button></td></tr>`;}).join('')}</tbody></table></div></div>`; },
+            render() { return `<div class="card"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Indicadores</h3><button class="btn btn-primary btn-sm" onclick="SettingsIndicatorController.openModal()"><i class="ph ph-plus"></i> Nova Indicador</button></div><div class="table-container"><table><thead><tr><th>Nome</th><th>Canal</th><th class="text-right">Ações</th></tr></thead><tbody>${DataManager.db.indicators.map(i => {const c = DataManager.getChannel(i.channelId); return `<tr><td class="font-bold">${i.name}</td><td>${c?c.name:'N/A'}</td><td class="text-right"><button class="btn btn-outline btn-sm" onclick="SettingsIndicatorController.openModal(${i.id})"><i class="ph ph-pencil-simple"></i></button><button class="btn btn-danger btn-sm" onclick="if(confirm('Excluir?')) { DataManager.deleteItem('indicators', ${i.id}); setTimeout(()=>App.navigate('settings-indicators'),200); }"><i class="ph ph-trash"></i></button></td></tr>`;}).join('')}</tbody></table></div></div>`; },
             openModal(id=null) {
                 const item = id ? DataManager.db.indicators.find(i=>i.id==id) : null;
                 const isEdit = !!item;
@@ -1072,16 +1072,146 @@
         };
 
         const SettingsQuestionController = {
-            render() { return `<div class="card"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Perguntas</h3><button class="btn btn-primary btn-sm" onclick="SettingsQuestionController.openModal()"><i class="ph ph-plus"></i> Nova Pergunta</button></div><div class="table-container"><table><thead><tr><th>Texto</th><th>Gravidade</th><th class="text-right">Ações</th></tr></thead><tbody>${DataManager.db.questions.map(q => `<tr><td class="font-bold">${q.text}</td><td>${Utils.getSeverityBadge(q.severity)}</td><td class="text-right"><button class="btn btn-outline btn-sm" onclick="SettingsQuestionController.openModal(${q.id})"><i class="ph ph-pencil-simple"></i></button><button class="btn btn-danger btn-sm" onclick="if(confirm('Excluir?')) { DataManager.deleteItem('questions', ${q.id}); setTimeout(()=>App.navigate('settings-questions'),200); }"><i class="ph ph-trash"></i></button></td></tr>`).join('')}</tbody></table></div></div>`; },
+            filterChannelId: 'all',
+
+            render() { 
+                const questions = DataManager.db.questions;
+                const channels = DataManager.db.channels;
+                
+                let filteredQuestions = questions;
+                if (this.filterChannelId !== 'all') {
+                    const validIndicatorIds = DataManager.db.indicators
+                        .filter(i => i.channelId == this.filterChannelId)
+                        .map(i => i.id);
+                    filteredQuestions = questions.filter(q => validIndicatorIds.includes(q.indicatorId));
+                }
+
+                return `
+                    <div class="card">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold">Perguntas</h3>
+                            <button class="btn btn-primary btn-sm" onclick="SettingsQuestionController.openModal()"><i class="ph ph-plus"></i> Nova Pergunta</button>
+                        </div>
+                        
+                        <div class="flex gap-4 items-end mb-4" style="background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                            <div class="form-group mb-0" style="flex:1; max-width: 300px;">
+                                <label class="form-label">Filtrar por Canal</label>
+                                <select class="form-control" onchange="SettingsQuestionController.setFilter(this.value)">
+                                    <option value="all">Todos</option>
+                                    ${channels.map(c => `<option value="${c.id}" ${this.filterChannelId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th>Texto</th><th>Indicador</th><th>Gravidade</th><th class="text-right">Ações</th></tr></thead>
+                                <tbody>
+                                    ${filteredQuestions.map(q => {
+                                        const ind = DataManager.db.indicators.find(i => i.id == q.indicatorId);
+                                        return `<tr>
+                                            <td class="font-bold">${q.text}</td>
+                                            <td class="text-muted">${ind ? ind.name : '-'}</td>
+                                            <td>${Utils.getSeverityBadge(q.severity)}</td>
+                                            <td class="text-right">
+                                                <button class="btn btn-outline btn-sm" onclick="SettingsQuestionController.openModal(${q.id})"><i class="ph ph-pencil-simple"></i></button>
+                                                <button class="btn btn-danger btn-sm" onclick="if(confirm('Excluir?')) { DataManager.deleteItem('questions', ${q.id}); setTimeout(()=>App.navigate('settings-questions'),200); }"><i class="ph ph-trash"></i></button>
+                                            </td>
+                                        </tr>`;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>`; 
+            },
+
+            setFilter(val) {
+                this.filterChannelId = val;
+                document.getElementById('content').innerHTML = this.render();
+            },
+
             openModal(id=null) {
                 const item = id ? DataManager.getQuestion(id) : null;
                 const isEdit = !!item;
-                const html = `<div class="modal-overlay active"><div class="modal-content"><div class="modal-header"><h3>${isEdit ? 'Editar' : 'Novo'} Pergunta</h3><button onclick="document.getElementById('modal-container').innerHTML=''"><i class="ph ph-x"></i></button></div><div class="modal-body"><input type="hidden" id="q-id" value="${isEdit ? item.id : ''}"><div class="form-group"><label class="form-label">Texto</label><textarea id="q-text" class="form-control">${isEdit ? item.text : ''}</textarea></div><div class="form-group"><label class="form-label">Indicador</label><select id="q-ind" class="form-control">${DataManager.db.indicators.map(i => `<option value="${i.id}" ${isEdit && item.indicatorId == i.id ? 'selected' : ''}>${i.name}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">Gravidade</label><select id="q-sev" class="form-control"><option value="leve">Leve (-1)</option><option value="media">Média (-2.5)</option><option value="grave">Grave (-4)</option><option value="gravissima">Gravíssima (-50)</option></select></div></div><div class="modal-footer"><button class="btn btn-primary" onclick="SettingsQuestionController.save()">Salvar</button></div></div></div>`;
+                
+                let initialChannelId = "";
+                if (item) {
+                    const ind = DataManager.db.indicators.find(i => i.id == item.indicatorId);
+                    if (ind) initialChannelId = ind.channelId;
+                }
+
+                const channels = DataManager.db.channels;
+
+                const html = `
+                    <div class="modal-overlay active">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h3>${isEdit ? 'Editar' : 'Nova'} Pergunta</h3>
+                                <button onclick="document.getElementById('modal-container').innerHTML=''"><i class="ph ph-x"></i></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" id="q-id" value="${isEdit ? item.id : ''}">
+                                
+                                <div class="form-group">
+                                    <label class="form-label">Canal</label>
+                                    <select id="q-channel" class="form-control" onchange="SettingsQuestionController.updateModalIndicators(this.value)">
+                                        <option value="">Selecione...</option>
+                                        ${channels.map(c => `<option value="${c.id}" ${initialChannelId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Indicador</label>
+                                    <select id="q-ind" class="form-control">
+                                        <option value="">Selecione um Canal acima...</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Texto</label>
+                                    <textarea id="q-text" class="form-control">${isEdit ? item.text : ''}</textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Gravidade</label>
+                                    <select id="q-sev" class="form-control">
+                                        <option value="leve" ${isEdit && item.severity == 'leve' ? 'selected' : ''}>Leve (-1)</option>
+                                        <option value="media" ${isEdit && item.severity == 'media' ? 'selected' : ''}>Média (-2.5)</option>
+                                        <option value="grave" ${isEdit && item.severity == 'grave' ? 'selected' : ''}>Grave (-4)</option>
+                                        <option value="gravissima" ${isEdit && item.severity == 'gravissima' ? 'selected' : ''}>Gravíssima (-50)</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-primary" onclick="SettingsQuestionController.save()">Salvar</button>
+                            </div>
+                        </div>
+                    </div>`;
                 document.getElementById('modal-container').innerHTML = html;
+                this.updateModalIndicators(initialChannelId, item ? item.indicatorId : null);
             },
+
+            updateModalIndicators(channelId, selectedIndId = null) {
+                const indSelect = document.getElementById('q-ind');
+                if (!channelId) {
+                    indSelect.innerHTML = '<option value="">Selecione um Canal acima...</option>';
+                    return;
+                }
+                const indicators = DataManager.db.indicators.filter(i => i.channelId == channelId);
+                if (indicators.length === 0) {
+                    indSelect.innerHTML = '<option value="">Sem indicadores neste canal</option>';
+                } else {
+                    indSelect.innerHTML = indicators.map(i => `<option value="${i.id}" ${selectedIndId == i.id ? 'selected' : ''}>${i.name}</option>`).join('');
+                }
+            },
+
             async save() {
-                const id = document.getElementById('q-id').value, text = document.getElementById('q-text').value, indicatorId = document.getElementById('q-ind').value, severity = document.getElementById('q-sev').value;
-                if(!text) return alert("Preencha campos.");
+                const id = document.getElementById('q-id').value;
+                const text = document.getElementById('q-text').value;
+                const indicatorId = document.getElementById('q-ind').value;
+                const severity = document.getElementById('q-sev').value;
+                
+                if(!text || !indicatorId) return alert("Preencha todos os campos.");
+                
                 const obj = { id: id || undefined, text, indicatorId, severity };
                 if(id) await DataManager.updateItem('questions', obj); else await DataManager.addItem('questions', obj);
                 document.getElementById('modal-container').innerHTML = ''; App.navigate('settings-questions');
