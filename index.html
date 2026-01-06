@@ -1383,23 +1383,29 @@
                             <button class="btn btn-outline btn-icon" onclick="document.getElementById('file-q-${q.id}').click()" data-tooltip="Anexar Foto">
                                 <i class="ph ph-camera"></i>
                             </button>
-                            <input type="file" id="file-q-${q.id}" class="hidden" accept="image/*" onchange="NewEvaluationController.handleImage(${q.id}, this)">
+                            <input type="file" id="file-q-${q.id}" class="hidden" accept="image/*" multiple onchange="NewEvaluationController.handleImage(${q.id}, this)">
                         </div>
                         
                         <!-- Galeria de Imagens -->
-                        <div class="mt-2 flex gap-2 flex-wrap" id="gallery-${q.id}">
+                        <div class="mt-3 flex gap-3 flex-wrap" id="gallery-${q.id}">
                             ${mediaArray.map((src, index) => `
-                                <div class="relative inline-block" style="margin-top: 5px;">
-                                    <img src="${src}" style="height: 60px; width: 60px; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border);">
-                                    <button class="btn-icon" style="position:absolute; top:-8px; right:-8px; width:20px; height:20px; background:var(--danger); color:white; font-size:0.7rem; border:2px solid white;" onclick="NewEvaluationController.removeImage(${q.id}, ${index})"><i class="ph ph-x"></i></button>
+                                <div class="relative inline-block" style="width: 70px; height: 70px; margin-right: 8px; margin-top: 8px;">
+                                    <img src="${src}" style="width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow-sm); cursor: pointer;" onclick="window.open(this.src)">
+                                    <button 
+                                        class="btn-icon" 
+                                        style="position:absolute; top:-8px; right:-8px; width:24px; height:24px; background:var(--danger); color:white; font-size:0.8rem; border:2px solid var(--bg-card); box-shadow: var(--shadow-sm); z-index:5;" 
+                                        onclick="event.stopPropagation(); NewEvaluationController.removeImage(${q.id}, ${index})"
+                                        data-tooltip="Remover Imagem"
+                                    >
+                                        <i class="ph ph-trash"></i>
+                                    </button>
                                 </div>
                             `).join('')}
                         </div>
                     </div>`;
             },
             async handleImage(qId, input) {
-                if (input.files && input.files[0]) {
-                    const file = input.files[0];
+                if (input.files && input.files.length > 0) {
                     const btn = input.parentElement.querySelector('button');
                     const originalIcon = btn.innerHTML;
                     
@@ -1414,56 +1420,67 @@
                         reader.readAsDataURL(file);
                     });
 
-                    try {
-                        let finalUrl = null;
-
-                        // 1. Tenta Upload no Supabase (Bucket 'evidence')
-                        try {
-                            const fileExt = file.name.split('.').pop();
-                            const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-                            const filePath = `${fileName}`;
-
-                            const { error: uploadError } = await supabaseClient.storage
-                                .from('evidence')
-                                .upload(filePath, file);
-
-                            if (uploadError) throw uploadError;
-
-                            const { data: { publicUrl } } = supabaseClient.storage
-                                .from('evidence')
-                                .getPublicUrl(filePath);
-                            
-                            finalUrl = publicUrl;
-                        } catch (uploadErr) {
-                            console.warn('Upload Supabase falhou (bucket pode não existir ou permissão negada). Usando modo offline (Base64).', uploadErr);
-                            // 2. Fallback para Base64 se o bucket falhar
-                            finalUrl = await getBase64(file);
-                        }
-
-                        // Inicializa estrutura se não existir
-                        if(!this.state.answers[qId]) this.state.answers[qId] = { media: [] };
-                        
-                        // Garante que é array (converte string legada se necessário)
-                        if(!Array.isArray(this.state.answers[qId].media)) {
-                             const old = this.state.answers[qId].media;
-                             this.state.answers[qId].media = old ? [old] : [];
-                        }
-                        
-                        // Adiciona a nova imagem
-                        this.state.answers[qId].media.push(finalUrl);
-                        
-                        // Atualiza a tela
-                        this.refreshRow(qId);
-                        UISystem.toast("Imagem adicionada!", "success");
-
-                    } catch (error) {
-                        console.error('Erro fatal ao processar imagem:', error);
-                        UISystem.toast("Erro ao processar imagem.", "error");
-                    } finally {
-                        btn.disabled = false;
-                        btn.innerHTML = originalIcon;
-                        input.value = ''; // Limpa o input para permitir selecionar o mesmo arquivo novamente
+                    // Inicializa estrutura se não existir
+                    if(!this.state.answers[qId]) this.state.answers[qId] = { media: [] };
+                    if(!Array.isArray(this.state.answers[qId].media)) {
+                            const old = this.state.answers[qId].media;
+                            this.state.answers[qId].media = old ? [old] : [];
                     }
+
+                    let successCount = 0;
+                    let errorCount = 0;
+
+                    // Processa todos os arquivos selecionados
+                    for (let i = 0; i < input.files.length; i++) {
+                        const file = input.files[i];
+                        try {
+                            let finalUrl = null;
+
+                            // 1. Tenta Upload no Supabase (Bucket 'evidence')
+                            try {
+                                const fileExt = file.name.split('.').pop();
+                                const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+                                const filePath = `${fileName}`;
+
+                                const { error: uploadError } = await supabaseClient.storage
+                                    .from('evidence')
+                                    .upload(filePath, file);
+
+                                if (uploadError) throw uploadError;
+
+                                const { data: { publicUrl } } = supabaseClient.storage
+                                    .from('evidence')
+                                    .getPublicUrl(filePath);
+                                
+                                finalUrl = publicUrl;
+                            } catch (uploadErr) {
+                                console.warn('Upload Supabase falhou. Usando modo offline (Base64).', uploadErr);
+                                // 2. Fallback para Base64 se o bucket falhar
+                                finalUrl = await getBase64(file);
+                            }
+
+                            // Adiciona a nova imagem
+                            this.state.answers[qId].media.push(finalUrl);
+                            successCount++;
+
+                        } catch (error) {
+                            console.error('Erro ao processar arquivo:', file.name, error);
+                            errorCount++;
+                        }
+                    }
+
+                    // Atualiza a tela após processar tudo
+                    this.refreshRow(qId);
+                    
+                    if (errorCount > 0) {
+                        UISystem.toast(`${successCount} imagens adicionadas. ${errorCount} falharam.`, "warning");
+                    } else {
+                        UISystem.toast(`${successCount} imagens adicionadas!`, "success");
+                    }
+
+                    btn.disabled = false;
+                    btn.innerHTML = originalIcon;
+                    input.value = ''; // Limpa o input
                 }
             },
             removeImage(qId, index) {
