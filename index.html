@@ -61,41 +61,40 @@
             --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* PALETA DARK MODE (Ajustada para #000000 e Homogênea) */
+        /* PALETA DARK MODE (Preto Puro #000000) */
         [data-theme="dark"] {
             --primary: #00a4ff;
             --primary-dark: #0082da;
-            --primary-light: #1e293b; /* Cinza azulado muito escuro para fundos leves */
+            --primary-light: #1e293b; 
             
-            --bg-body: #000000;       /* Preto Puro (Background) */
-            --bg-card: #121212;       /* Cinza quase preto para cards (Material Dark) */
+            --bg-body: #000000;       /* Preto Puro */
+            --bg-card: #121212;       /* Cinza muito escuro para cards */
             
             /* Sidebar Dark */
             --bg-sidebar: #000000;
             --bg-sidebar-gradient-start: #0a0a0a;
             --bg-sidebar-gradient-end: #000000;
             
-            --text-main: #f1f5f9;     /* Branco suave */
-            --text-muted: #94a3b8;    /* Cinza médio */
+            --text-main: #f1f5f9;     
+            --text-muted: #94a3b8;    
             --text-on-primary: #FFFFFF; 
             
             --text-sidebar-primary: #e2e8f0;
             --text-sidebar-muted: #64748b;
             --text-sidebar-hover: #00a4ff;
-            --sidebar-border: #27272a; /* Cinza escuro para bordas */
+            --sidebar-border: #27272a; 
 
-            --border: #27272a;        /* Cinza escuro (Zinc-800) */
-            --input-bg: #18181b;      /* Cinza escuro (Zinc-900) */
+            --border: #27272a;        
+            --input-bg: #18181b;      
             
             --accent: #27272a;        
             --accent-dark: #18181b;
             
             --success: #00ebb8; 
-            --success-text: #000000;  /* Texto preto para contraste no verde */
+            --success-text: #000000;  
             --warning: #f9f871;
-            --warning-text: #000000;  /* Texto preto para contraste no amarelo */
+            --warning-text: #000000;  
 
-            /* Sombras sutis ou brancas para profundidade no preto */
             --shadow-sm: 0 1px 2px 0 rgb(255 255 255 / 0.05);
             --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.8);
             --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.9);
@@ -171,7 +170,6 @@
         }
         .btn-primary:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; opacity: 0.7; }
         
-        /* Botão secundário */
         .btn-secondary { background: var(--secondary); color: #fff; border-color: transparent; }
         [data-theme="dark"] .btn-secondary { color: #002970; font-weight: 700; }
         .btn-secondary:hover { filter: brightness(0.9); }
@@ -184,7 +182,6 @@
         
         .btn-sm { padding: 0.35rem 0.75rem; font-size: 0.8rem; border-radius: 8px; }
 
-        /* Icon Button */
         .btn-icon { width: 40px; height: 40px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; transition: var(--transition); }
         .btn-icon:hover { background: rgba(0, 164, 255, 0.1); color: var(--primary); transform: rotate(5deg); }
 
@@ -801,7 +798,7 @@
         // --- 2. UTILS ---
         const Utils = {
             formatDate(dateStr) { if(!dateStr) return "-"; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; },
-            getClassByScore(score) { if (score >= 90) return 'success'; if (score >= 70) return 'warning'; return 'danger'; },
+            getClassByScore(score) { if (Number(score) === 100) return 'success'; if (score >= 70) return 'warning'; return 'danger'; },
             getPenaltyPoints(severity) { const points = { 'gravissima': 50, 'grave': 4, 'media': 2.5, 'leve': 1 }; return points[severity] || 0; },
             getSeverityBadge(severity) { 
                 const map = { 'leve': 'Leve', 'media': 'Média', 'grave': 'Grave', 'gravissima': 'Gravíssima' }; 
@@ -944,18 +941,109 @@
                 const user = App.currentUser;
                 const evals = DataManager.getEvaluationsByUser(user);
                 const stores = DataManager.getStoresByUser(user);
+
+                // --- CÁLCULO DOS RANKINGS ---
+                const storeStats = {};
+                const managerStats = {};
+
+                evals.forEach(ev => {
+                    // Ranking Lojas
+                    if (!storeStats[ev.storeId]) {
+                        const s = DataManager.getStore(ev.storeId);
+                        storeStats[ev.storeId] = { 
+                            id: ev.storeId, 
+                            name: s ? s.name : 'Loja Removida', 
+                            totalScore: 0, 
+                            count: 0 
+                        };
+                    }
+                    storeStats[ev.storeId].totalScore += ev.score;
+                    storeStats[ev.storeId].count++;
+
+                    // Ranking Gestoras (se admin ou visualizando tudo)
+                    const store = DataManager.getStore(ev.storeId);
+                    if (store && store.managerId) {
+                        if (!managerStats[store.managerId]) {
+                            const m = DataManager.getManager(store.managerId);
+                            managerStats[store.managerId] = { 
+                                id: store.managerId, 
+                                name: m ? m.name : 'Gestora Removida', 
+                                totalScore: 0, 
+                                count: 0 
+                            };
+                        }
+                        managerStats[store.managerId].totalScore += ev.score;
+                        managerStats[store.managerId].count++;
+                    }
+                });
+
+                // Ordenar Rankings
+                const rankedStores = Object.values(storeStats)
+                    .map(s => ({ ...s, avg: s.totalScore / s.count })) // No rounding on individual calculation
+                    .sort((a, b) => b.avg - a.avg);
+
+                const rankedManagers = Object.values(managerStats)
+                    .map(m => ({ ...m, avg: m.totalScore / m.count })) // No rounding here
+                    .sort((a, b) => b.avg - a.avg);
+
                 let actionsHtml = user.role === 'admin' 
                     ? `<button class="btn btn-primary w-full" onclick="App.navigate('new-eval')"><i class="ph ph-plus-circle"></i> Nova Auditoria</button><button class="btn btn-secondary w-full" onclick="App.navigate('settings-managers')"><i class="ph ph-users"></i> Gerenciar Equipe</button>` 
                     : `<button class="btn btn-outline w-full" onclick="App.navigate('history')">Ver Meus Resultados</button>`;
+                
                 return `
                     <div class="kpi-grid">
                         <div class="card"><span class="kpi-label">Auditorias Realizadas</span><div class="kpi-value">${evals.length}</div></div>
                         <div class="card"><span class="kpi-label">Lojas Vinculadas</span><div class="kpi-value">${stores.length}</div></div>
                         <div class="card flex flex-col justify-between"><span class="kpi-label">Ações Rápidas</span><div class="flex gap-2 mt-2">${actionsHtml}</div></div>
                     </div>
+
+                    <!-- Rankings Section -->
+                    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                        <!-- Ranking Lojas -->
+                        <div class="card">
+                            <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-trophy" style="color:var(--warning);"></i> Ranking de Lojas</h3>
+                            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                                <table>
+                                    <thead><tr><th>Pos</th><th>Loja</th><th class="text-center">Avaliações</th><th class="text-right">Média</th></tr></thead>
+                                    <tbody>
+                                        ${rankedStores.map((s, index) => `
+                                            <tr>
+                                                <td><span class="badge ${index < 3 ? 'badge-warning' : 'badge-neutral'}">#${index + 1}</span></td>
+                                                <td class="font-bold">${s.name}</td>
+                                                <td class="text-center">${s.count}</td>
+                                                <td class="text-right"><span class="badge badge-${Utils.getClassByScore(s.avg)}">${Number(s.avg).toFixed(2)}%</span></td>
+                                            </tr>
+                                        `).join('')}
+                                        ${rankedStores.length === 0 ? '<tr><td colspan="4" class="text-center text-muted p-4">Sem dados</td></tr>' : ''}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Ranking Gestoras -->
+                        <div class="card">
+                            <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-crown" style="color:var(--primary);"></i> Ranking de Gestoras</h3>
+                            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                                <table>
+                                    <thead><tr><th>Pos</th><th>Gestora</th><th class="text-right">Média Geral</th></tr></thead>
+                                    <tbody>
+                                        ${rankedManagers.map((m, index) => `
+                                            <tr>
+                                                <td><span class="badge ${index < 3 ? 'badge-primary' : 'badge-neutral'}">#${index + 1}</span></td>
+                                                <td class="font-bold">${m.name}</td>
+                                                <td class="text-right"><span class="badge badge-${Utils.getClassByScore(m.avg)}">${Number(m.avg).toFixed(2)}%</span></td>
+                                            </tr>
+                                        `).join('')}
+                                        ${rankedManagers.length === 0 ? '<tr><td colspan="3" class="text-center text-muted p-4">Sem dados</td></tr>' : ''}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="card">
                         <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-clock-counter-clockwise"></i> Atividade Recente</h3>
-                        ${evals.length > 0 ? `<div class="table-container"><table><thead><tr><th>Data</th><th>Loja</th><th>Nota</th></tr></thead><tbody>${evals.slice(0,5).map(e => `<tr><td>${Utils.formatDate(e.date)}</td><td>${DataManager.getStore(e.storeId)?.name}</td><td><span class="badge badge-${Utils.getClassByScore(e.score)}">${e.score}%</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="text-muted text-center p-4">Nenhuma atividade recente.</div>'}
+                        ${evals.length > 0 ? `<div class="table-container"><table><thead><tr><th>Data</th><th>Loja</th><th>Nota</th></tr></thead><tbody>${evals.slice(0,5).map(e => `<tr><td>${Utils.formatDate(e.date)}</td><td>${DataManager.getStore(e.storeId)?.name}</td><td><span class="badge badge-${Utils.getClassByScore(e.score)}">${Number(e.score).toFixed(2)}%</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="text-muted text-center p-4">Nenhuma atividade recente.</div>'}
                     </div>`;
             }
         };
@@ -967,15 +1055,16 @@
                 let avgScore = 0, aboveTarget = 0, critical = 0;
                 if (evals.length > 0) {
                     const totalScore = evals.reduce((sum, e) => sum + e.score, 0);
-                    avgScore = Math.round(totalScore / evals.length);
-                    aboveTarget = evals.filter(e => e.score >= 80).length;
+                    avgScore = totalScore / evals.length; // No rounding here
+                    // ALTERAÇÃO: Meta ajustada para 100
+                    aboveTarget = evals.filter(e => e.score === 100).length;
                     critical = evals.filter(e => e.score < 60).length;
                 }
                 return `
                     <div class="card mb-4"><div class="flex gap-4 items-end flex-wrap"><div class="form-group mb-0" style="flex:1;"><label class="form-label">Período</label><select class="form-control"><option>Todos</option></select></div><button class="btn btn-primary"><i class="ph ph-funnel"></i> Filtrar</button></div></div>
                     <div class="kpi-grid">
-                        <div class="card" style="border-left: 4px solid var(--primary);"><span class="kpi-label">Média ${user.role === 'admin'?'Geral':'Minhas Lojas'}</span><div class="kpi-value">${avgScore}%</div></div>
-                        <div class="card" style="border-left: 4px solid var(--success);"><span class="kpi-label">Na Meta (>80%)</span><div class="kpi-value text-success">${aboveTarget}</div></div>
+                        <div class="card" style="border-left: 4px solid var(--primary);"><span class="kpi-label">Média ${user.role === 'admin'?'Geral':'Minhas Lojas'}</span><div class="kpi-value">${Number(avgScore).toFixed(1)}%</div></div>
+                        <div class="card" style="border-left: 4px solid var(--success);"><span class="kpi-label">Na Meta (100%)</span><div class="kpi-value text-success">${aboveTarget}</div></div>
                         <div class="card" style="border-left: 4px solid var(--danger);"><span class="kpi-label">Críticas (<60%)</span><div class="kpi-value text-danger">${critical}</div></div>
                     </div>
                     <div class="card"><h3 class="font-bold mb-4">Evolução de Notas</h3><div style="display:flex; align-items:flex-end; gap:12px; height:180px; padding-top:20px; border-bottom:1px solid var(--border); overflow-x:auto;">${evals.slice(0, 10).reverse().map(e => `<div data-tooltip="${Utils.formatDate(e.date)}: ${e.score}%" style="flex:1; min-width:20px; border-radius:4px 4px 0 0; height:${e.score}%; background:var(--primary); opacity:0.8; transition: height 1s;"></div>`).join('')}</div></div>`;
@@ -999,7 +1088,7 @@
                             // Botão de Visualização Detalhada
                             const viewBtn = `<button class="btn btn-secondary btn-sm" data-tooltip="Ver Detalhes" onclick="HistoryController.viewDetails(${ev.id})"><i class="ph ph-eye"></i></button>`;
 
-                            return `<tr><td>${Utils.formatDate(ev.date)}</td><td class="font-bold">${store ? store.name : 'Removida'}</td><td>${channel ? channel.name : '-'}</td><td><span class="badge badge-${badgeClass}">${ev.score}%</span></td><td class="text-right"><div class="flex justify-end gap-2">${viewBtn}<button class="btn btn-outline btn-sm" data-tooltip="Imprimir Relatório" onclick="ReportController.generateAndPrint(DataManager.db.evaluations.find(e => e.id == ${ev.id}))"><i class="ph ph-printer"></i></button>${deleteBtn}</div></td></tr>`;
+                            return `<tr><td>${Utils.formatDate(ev.date)}</td><td class="font-bold">${store ? store.name : 'Removida'}</td><td>${channel ? channel.name : '-'}</td><td><span class="badge badge-${badgeClass}">${Number(ev.score).toFixed(2)}%</span></td><td class="text-right"><div class="flex justify-end gap-2">${viewBtn}<button class="btn btn-outline btn-sm" data-tooltip="Imprimir Relatório" onclick="ReportController.generateAndPrint(DataManager.db.evaluations.find(e => e.id == ${ev.id}))"><i class="ph ph-printer"></i></button>${deleteBtn}</div></td></tr>`;
                         }).join('')}
                     </tbody></table></div></div>`;
             },
@@ -1108,7 +1197,7 @@
                                 <div><div class="text-muted font-bold text-xs uppercase">Gestora</div><div>${managerName}</div></div>
                                 <div><div class="text-muted font-bold text-xs uppercase">Avaliador</div><div>${ev.evaluator || '-'}</div></div>
                                 <div><div class="text-muted font-bold text-xs uppercase">Canal</div><div>${channel ? channel.name : '-'}</div></div>
-                                <div><div class="text-muted font-bold text-xs uppercase">Nota Final</div><div style="font-size: 1.25rem; font-weight: 800; color: var(--${Utils.getClassByScore(ev.score)});">${ev.score}%</div></div>
+                                <div><div class="text-muted font-bold text-xs uppercase">Nota Final</div><div style="font-size: 1.25rem; font-weight: 800; color: var(--${Utils.getClassByScore(ev.score)});">${Number(ev.score).toFixed(2)}%</div></div>
                             </div>
 
                             <div class="modal-body" style="flex: 1; overflow-y: auto; background: var(--bg-card);">
@@ -1227,7 +1316,8 @@
                         <div style="display:flex; gap:20px; margin-bottom:30px;">
                             <div style="flex:1; border:1px solid #e2e8f0; padding:15px; border-radius:8px; text-align:center;">
                                 <h3 style="margin-top:0;">Pontuação Final</h3>
-                                <div style="font-size:48px; font-weight:800; color:${evaluation.score >= 80 ? '#166534' : '#991b1b'};">${evaluation.score}</div>
+                                <!-- ALTERAÇÃO: Cor verde apenas se a nota for exatamente 100 -->
+                                <div style="font-size:48px; font-weight:800; color:${evaluation.score === 100 ? '#166534' : '#991b1b'};">${Number(evaluation.score).toFixed(2)}</div>
                                 <div style="font-size:12px; color:#666;">${scoreExplanation}</div>
                             </div>
                             <div style="flex:1; border:1px solid #e2e8f0; padding:15px; border-radius:8px;">
@@ -1609,7 +1699,8 @@
                     
                     const evalObj = {
                         storeId: this.state.selectedStore.id, channelId: this.state.selectedChannel,
-                        date: this.state.selectedDate, evaluator: App.currentUser.name, score: currentScore,
+                        date: this.state.selectedDate, evaluator: App.currentUser.name, 
+                        score: currentScore, // Nota exata, sem arredondamento
                         details: details, coveringManager: this.state.coveringManager
                     };
 
