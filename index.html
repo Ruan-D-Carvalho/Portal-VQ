@@ -61,43 +61,44 @@
             --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
-        /* PALETA DARK MODE */
+        /* PALETA DARK MODE (Ajustada para #000000 e Homogênea) */
         [data-theme="dark"] {
             --primary: #00a4ff;
             --primary-dark: #0082da;
-            --primary-light: #004492; 
+            --primary-light: #1e293b; /* Cinza azulado muito escuro para fundos leves */
             
-            --bg-body: #002970;
-            --bg-card: #004492;
+            --bg-body: #000000;       /* Preto Puro (Background) */
+            --bg-card: #121212;       /* Cinza quase preto para cards (Material Dark) */
             
             /* Sidebar Dark */
-            --bg-sidebar: #002970;
-            --bg-sidebar-gradient-start: #004492;
-            --bg-sidebar-gradient-end: #002970;
+            --bg-sidebar: #000000;
+            --bg-sidebar-gradient-start: #0a0a0a;
+            --bg-sidebar-gradient-end: #000000;
             
-            --text-main: #F0F9FF;
-            --text-muted: #8ab4f8;
+            --text-main: #f1f5f9;     /* Branco suave */
+            --text-muted: #94a3b8;    /* Cinza médio */
             --text-on-primary: #FFFFFF; 
             
-            --text-sidebar-primary: #E2E8F0;
-            --text-sidebar-muted: #0082da;
+            --text-sidebar-primary: #e2e8f0;
+            --text-sidebar-muted: #64748b;
             --text-sidebar-hover: #00a4ff;
-            --sidebar-border: #0062b5; 
+            --sidebar-border: #27272a; /* Cinza escuro para bordas */
 
-            --border: #0062b5;        
-            --input-bg: #002970;      
+            --border: #27272a;        /* Cinza escuro (Zinc-800) */
+            --input-bg: #18181b;      /* Cinza escuro (Zinc-900) */
             
-            --accent: #0082da;        
-            --accent-dark: #0062b5;
+            --accent: #27272a;        
+            --accent-dark: #18181b;
             
             --success: #00ebb8; 
-            --success-text: #ffffff;
+            --success-text: #000000;  /* Texto preto para contraste no verde */
             --warning: #f9f871;
-            --warning-text: #002970; 
+            --warning-text: #000000;  /* Texto preto para contraste no amarelo */
 
-            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.5);
-            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.6);
-            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.7);
+            /* Sombras sutis ou brancas para profundidade no preto */
+            --shadow-sm: 0 1px 2px 0 rgb(255 255 255 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.8);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.9);
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -327,7 +328,7 @@
             display: flex; align-items: center; justify-content: space-between; padding: 0 2rem; position: sticky; top: 0; z-index: 30;
             backdrop-filter: blur(12px); background: rgba(255, 255, 255, 0.85);
         }
-        [data-theme="dark"] .topbar { background: rgba(0, 68, 146, 0.85); }
+        [data-theme="dark"] .topbar { background: rgba(0, 0, 0, 0.85); }
         
         .content-area { padding: 2rem; max-width: 1400px; width: 100%; margin: 0 auto; animation: fadeIn 0.4s ease-out; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -803,7 +804,7 @@
             getClassByScore(score) { if (score >= 90) return 'success'; if (score >= 70) return 'warning'; return 'danger'; },
             getPenaltyPoints(severity) { const points = { 'gravissima': 50, 'grave': 4, 'media': 2.5, 'leve': 1 }; return points[severity] || 0; },
             getSeverityBadge(severity) { 
-                const map = { 'leve': 'Leve', 'media': 'Média', 'grave': 'Grave', 'gravissima': 'Gravissima' }; 
+                const map = { 'leve': 'Leve', 'media': 'Média', 'grave': 'Grave', 'gravissima': 'Gravíssima' }; 
                 const colorClass = severity === 'gravissima' ? 'badge-danger' : (severity === 'grave' ? 'badge-warning' : 'badge-neutral');
                 return `<span class="badge ${colorClass}">${map[severity] || severity}</span>`; 
             },
@@ -1134,6 +1135,7 @@
                 if (evaluation.coveringManager) managerName += ` (Cobertura: ${evaluation.coveringManager})`;
                 
                 let deductions = 0, cpCount = 0;
+                let hasCriticalFailure = false; // Flag para item gravíssimo
                 
                 // Contadores de severidade
                 const counts = { gravissima: 0, grave: 0, media: 0, leve: 0 };
@@ -1150,6 +1152,11 @@
                         // Incrementa o contador baseada na severidade
                         if (counts[q.severity] !== undefined) counts[q.severity]++;
 
+                        // Verifica se é gravíssima para zerar
+                        if (q.severity === 'gravissima') {
+                            hasCriticalFailure = true;
+                        }
+
                         if (det.cpValidated) cpCount++; else deductions += Utils.getPenaltyPoints(q.severity);
                     }
 
@@ -1160,6 +1167,11 @@
                     if(!detailsByIndicator[indName]) detailsByIndicator[indName] = [];
                     detailsByIndicator[indName].push({ detail: det, question: q });
                 });
+
+                // Texto explicativo da nota
+                const scoreExplanation = hasCriticalFailure 
+                    ? '<span style="color:#ef4444; font-weight:bold;">(ZERADA - Item Gravíssimo Inconforme)</span>' 
+                    : `(Base: 100 - Deduções: ${deductions})`;
 
                 // 2. Gera o HTML das linhas da tabela
                 let tableRowsHtml = '';
@@ -1216,7 +1228,7 @@
                             <div style="flex:1; border:1px solid #e2e8f0; padding:15px; border-radius:8px; text-align:center;">
                                 <h3 style="margin-top:0;">Pontuação Final</h3>
                                 <div style="font-size:48px; font-weight:800; color:${evaluation.score >= 80 ? '#166534' : '#991b1b'};">${evaluation.score}</div>
-                                <div style="font-size:12px; color:#666;">(Base: 100 - Deduções: ${deductions})</div>
+                                <div style="font-size:12px; color:#666;">${scoreExplanation}</div>
                             </div>
                             <div style="flex:1; border:1px solid #e2e8f0; padding:15px; border-radius:8px;">
                                 <h3 style="margin-top:0; font-size: 1rem;">Resumo de Inconformidades</h3>
@@ -1262,6 +1274,8 @@
         const NewEvaluationController = {
             state: { active: false, selectedStore: null, selectedChannel: null, selectedDate: null, activeIndicatorId: null, answers: {}, coveringManager: null },
             
+            // ... (rest of the controller methods remain the same until submit)
+
             render() {
                 if (this.state.active && this.state.selectedStore) return this.renderChecklistLayout();
                 setTimeout(() => this.openSetupModal(), 100);
@@ -1552,6 +1566,9 @@
                         throw new Error("Não há perguntas para salvar.");
                     }
 
+                    // Flag para verificar se há item gravíssimo inconforme
+                    let zeroEvaluation = false;
+
                     for (let q of allQs) {
                         const ans = this.state.answers[q.id] || { value: null }; 
                         if(!ans.value) continue;
@@ -1565,11 +1582,24 @@
                             media: ans.media && ans.media.length > 0 ? ans.media : null 
                         });
 
-                        if (ans.value === 'inconforme' && !((q.severity==='media'||q.severity==='leve') && ans.cpValidated)) {
-                            currentScore -= Utils.getPenaltyPoints(q.severity);
+                        if (ans.value === 'inconforme') {
+                            // Se gravíssima for inconforme, zera tudo
+                            if (q.severity === 'gravissima') {
+                                zeroEvaluation = true;
+                            }
+                            
+                            if (!((q.severity==='media'||q.severity==='leve') && ans.cpValidated)) {
+                                currentScore -= Utils.getPenaltyPoints(q.severity);
+                            }
                         }
                     }
-                    if (currentScore < 0) currentScore = 0;
+                    
+                    // Aplica a regra de zerar avaliação
+                    if (zeroEvaluation) {
+                        currentScore = 0;
+                    } else if (currentScore < 0) {
+                        currentScore = 0;
+                    }
                     
                     if (details.length === 0) {
                         throw new Error("Nenhuma resposta foi registrada.");
@@ -1715,7 +1745,7 @@
                     <div class="form-group"><label class="form-label">Canal</label><select class="form-control" id="qchannel" onchange="SettingsQuestionController.updateInds(this.value)"><option value="">Selecione...</option>${DataManager.db.channels.map(c=>`<option value="${c.id}" ${chId==c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
                     <div class="form-group"><label class="form-label">Indicador</label><select class="form-control" id="qind"><option value="">Selecione um Canal...</option></select></div>
                     <div class="form-group"><label class="form-label">Texto da Pergunta</label><textarea class="form-control" id="qtext" rows="2">${q.text||''}</textarea></div>
-                    <div class="form-group"><label class="form-label">Gravidade</label><select class="form-control" id="qsev"><option value="leve" ${q.severity==='leve'?'selected':''}>Leve (-1)</option><option value="media" ${q.severity==='media'?'selected':''}>Média (-2.5)</option><option value="grave" ${q.severity==='grave'?'selected':''}>Grave (-4)</option><option value="gravissima" ${q.severity==='gravissima'?'selected':''}>Gravíssima/Gravissima</option></select></div>`;
+                    <div class="form-group"><label class="form-label">Gravidade</label><select class="form-control" id="qsev"><option value="leve" ${q.severity==='leve'?'selected':''}>Leve (-1)</option><option value="media" ${q.severity==='media'?'selected':''}>Média (-2.5)</option><option value="grave" ${q.severity==='grave'?'selected':''}>Grave (-4)</option><option value="gravissima" ${q.severity==='gravissima'?'selected':''}>Gravíssima/Crítica (-50)</option></select></div>`;
                 document.getElementById('modal-container').innerHTML = GenericSettings.modal(id?'Editar Pergunta':'Nova Pergunta', html, 'SettingsQuestionController.save()');
                 this.updateInds(chId, q.indicatorId);
             },
