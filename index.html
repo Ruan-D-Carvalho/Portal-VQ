@@ -521,7 +521,7 @@
             </div>
             <ul class="nav-links" id="sidebar-nav-links"></ul>
             <div style="padding: 1.5rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--text-sidebar-muted); text-align: center;">
-                v2.3 Palette
+                v2.4 Palette (Filtered)
             </div>
         </aside>
         <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
@@ -805,7 +805,10 @@
                 const colorClass = severity === 'gravissima' ? 'badge-danger' : (severity === 'grave' ? 'badge-warning' : 'badge-neutral');
                 return `<span class="badge ${colorClass}">${map[severity] || severity}</span>`; 
             },
-            getStatusBadge(status) { const colors = { 'Ativa': 'success', 'Desligada': 'danger', 'Férias': 'warning' }; return `<span class="badge badge-${colors[status] || 'neutral'}">${status}</span>`; }
+            getStatusBadge(status) { 
+                const colors = { 'Ativa': 'success', 'Desligada': 'danger', 'Férias': 'warning', 'Atestado Medico': 'warning', 'Licença Maternidade': 'warning' }; 
+                return `<span class="badge badge-${colors[status] || 'neutral'}">${status}</span>`; 
+            }
         };
 
         // --- 3. APP CORE ---
@@ -945,6 +948,7 @@
                 // --- CÁLCULO DOS RANKINGS ---
                 const storeStats = {};
                 const managerStats = {};
+                const channelStats = {}; // Novo: Stats do Canal
 
                 evals.forEach(ev => {
                     // Ranking Lojas
@@ -975,15 +979,32 @@
                         managerStats[store.managerId].totalScore += ev.score;
                         managerStats[store.managerId].count++;
                     }
+
+                    // Ranking Canais
+                    if (!channelStats[ev.channelId]) {
+                        const c = DataManager.getChannel(ev.channelId);
+                        channelStats[ev.channelId] = {
+                            id: ev.channelId,
+                            name: c ? c.name : 'Canal Removido',
+                            totalScore: 0,
+                            count: 0
+                        };
+                    }
+                    channelStats[ev.channelId].totalScore += ev.score;
+                    channelStats[ev.channelId].count++;
                 });
 
                 // Ordenar Rankings
                 const rankedStores = Object.values(storeStats)
-                    .map(s => ({ ...s, avg: s.totalScore / s.count })) // No rounding on individual calculation
+                    .map(s => ({ ...s, avg: s.totalScore / s.count })) 
                     .sort((a, b) => b.avg - a.avg);
 
                 const rankedManagers = Object.values(managerStats)
-                    .map(m => ({ ...m, avg: m.totalScore / m.count })) // No rounding here
+                    .map(m => ({ ...m, avg: m.totalScore / m.count })) 
+                    .sort((a, b) => b.avg - a.avg);
+
+                const rankedChannels = Object.values(channelStats)
+                    .map(c => ({ ...c, avg: c.totalScore / c.count }))
                     .sort((a, b) => b.avg - a.avg);
 
                 let actionsHtml = user.role === 'admin' 
@@ -998,23 +1019,22 @@
                     </div>
 
                     <!-- Rankings Section -->
-                    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+                    <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
                         <!-- Ranking Lojas -->
                         <div class="card">
                             <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-trophy" style="color:var(--warning);"></i> Ranking de Lojas</h3>
                             <div class="table-container" style="max-height: 300px; overflow-y: auto;">
                                 <table>
-                                    <thead><tr><th>Pos</th><th>Loja</th><th class="text-center">Avaliações</th><th class="text-right">Média</th></tr></thead>
+                                    <thead><tr><th>Pos</th><th>Loja</th><th class="text-right">Média</th></tr></thead>
                                     <tbody>
                                         ${rankedStores.map((s, index) => `
                                             <tr>
                                                 <td><span class="badge ${index < 3 ? 'badge-warning' : 'badge-neutral'}">#${index + 1}</span></td>
                                                 <td class="font-bold">${s.name}</td>
-                                                <td class="text-center">${s.count}</td>
                                                 <td class="text-right"><span class="badge badge-${Utils.getClassByScore(s.avg)}">${Number(s.avg).toFixed(2)}%</span></td>
                                             </tr>
                                         `).join('')}
-                                        ${rankedStores.length === 0 ? '<tr><td colspan="4" class="text-center text-muted p-4">Sem dados</td></tr>' : ''}
+                                        ${rankedStores.length === 0 ? '<tr><td colspan="3" class="text-center text-muted p-4">Sem dados</td></tr>' : ''}
                                     </tbody>
                                 </table>
                             </div>
@@ -1025,7 +1045,7 @@
                             <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-crown" style="color:var(--primary);"></i> Ranking de Gestoras</h3>
                             <div class="table-container" style="max-height: 300px; overflow-y: auto;">
                                 <table>
-                                    <thead><tr><th>Pos</th><th>Gestora</th><th class="text-right">Média Geral</th></tr></thead>
+                                    <thead><tr><th>Pos</th><th>Gestora</th><th class="text-right">Média</th></tr></thead>
                                     <tbody>
                                         ${rankedManagers.map((m, index) => `
                                             <tr>
@@ -1039,11 +1059,31 @@
                                 </table>
                             </div>
                         </div>
+
+                         <!-- Ranking Canais (NOVO) -->
+                        <div class="card">
+                            <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-tree-structure" style="color:var(--success);"></i> Ranking de Canais</h3>
+                            <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                                <table>
+                                    <thead><tr><th>Pos</th><th>Canal</th><th class="text-right">Média</th></tr></thead>
+                                    <tbody>
+                                        ${rankedChannels.map((c, index) => `
+                                            <tr>
+                                                <td><span class="badge ${index < 3 ? 'badge-success' : 'badge-neutral'}">#${index + 1}</span></td>
+                                                <td class="font-bold">${c.name}</td>
+                                                <td class="text-right"><span class="badge badge-${Utils.getClassByScore(c.avg)}">${Number(c.avg).toFixed(2)}%</span></td>
+                                            </tr>
+                                        `).join('')}
+                                        ${rankedChannels.length === 0 ? '<tr><td colspan="3" class="text-center text-muted p-4">Sem dados</td></tr>' : ''}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="card">
                         <h3 class="font-bold mb-4 flex items-center gap-2"><i class="ph ph-clock-counter-clockwise"></i> Atividade Recente</h3>
-                        ${evals.length > 0 ? `<div class="table-container"><table><thead><tr><th>Data</th><th>Loja</th><th>Nota</th></tr></thead><tbody>${evals.slice(0,5).map(e => `<tr><td>${Utils.formatDate(e.date)}</td><td>${DataManager.getStore(e.storeId)?.name}</td><td><span class="badge badge-${Utils.getClassByScore(e.score)}">${Number(e.score).toFixed(2)}%</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="text-muted text-center p-4">Nenhuma atividade recente.</div>'}
+                        ${evals.length > 0 ? `<div class="table-container"><table><thead><tr><th>Data</th><th>Loja</th><th>Nota</th></tr></thead><tbody>${evals.sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5).map(e => `<tr><td>${Utils.formatDate(e.date)}</td><td>${DataManager.getStore(e.storeId)?.name}</td><td><span class="badge badge-${Utils.getClassByScore(e.score)}">${Number(e.score).toFixed(2)}%</span></td></tr>`).join('')}</tbody></table></div>` : '<div class="text-muted text-center p-4">Nenhuma atividade recente.</div>'}
                     </div>`;
             }
         };
@@ -1072,25 +1112,96 @@
         };
 
         const HistoryController = {
-            render() {
-                const user = App.currentUser;
-                const evals = DataManager.getEvaluationsByUser(user);
-                const isAdmin = user.role === 'admin';
-                return `
-                    <div class="card"><div class="flex justify-between items-center mb-4"><h3 class="font-bold">Histórico Completo</h3></div>
-                    <div class="table-container"><table><thead><tr><th>Data</th><th>Loja</th><th>Canal</th><th>Nota</th><th class="text-right">Ações</th></tr></thead><tbody>
-                        ${evals.map(ev => {
-                            const store = DataManager.getStore(ev.storeId);
-                            const channel = DataManager.getChannel(ev.channelId);
-                            const badgeClass = Utils.getClassByScore(ev.score);
-                            const deleteBtn = isAdmin ? `<button class="btn btn-danger btn-sm" data-tooltip="Excluir" onclick="UISystem.confirm('Excluir Auditoria', 'Esta ação é irreversível.', () => { DataManager.deleteItem('evaluations', ${ev.id}); setTimeout(()=>App.navigate('history'), 300); })"><i class="ph ph-trash"></i></button>` : '';
-                            
-                            // Botão de Visualização Detalhada
-                            const viewBtn = `<button class="btn btn-secondary btn-sm" data-tooltip="Ver Detalhes" onclick="HistoryController.viewDetails(${ev.id})"><i class="ph ph-eye"></i></button>`;
+            state: {
+                searchManager: '',
+                searchStore: '',
+                searchChannel: '',
+                searchScore: ''
+            },
+            
+            setFilter(key, value) {
+                this.state[key] = value;
+                this.refreshList();
+            },
 
-                            return `<tr><td>${Utils.formatDate(ev.date)}</td><td class="font-bold">${store ? store.name : 'Removida'}</td><td>${channel ? channel.name : '-'}</td><td><span class="badge badge-${badgeClass}">${Number(ev.score).toFixed(2)}%</span></td><td class="text-right"><div class="flex justify-end gap-2">${viewBtn}<button class="btn btn-outline btn-sm" data-tooltip="Imprimir Relatório" onclick="ReportController.generateAndPrint(DataManager.db.evaluations.find(e => e.id == ${ev.id}))"><i class="ph ph-printer"></i></button>${deleteBtn}</div></td></tr>`;
-                        }).join('')}
-                    </tbody></table></div></div>`;
+            refreshList() {
+                const tbody = document.getElementById('history-table-body');
+                if(!tbody) return;
+                
+                const user = App.currentUser;
+                const isAdmin = user.role === 'admin';
+                let evals = DataManager.getEvaluationsByUser(user);
+
+                // Ordenar: Mais novas para as mais antigas (DESC)
+                evals.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                // Filtrar
+                evals = evals.filter(ev => {
+                    const store = DataManager.getStore(ev.storeId);
+                    const channel = DataManager.getChannel(ev.channelId);
+                    const manager = store && store.managerId ? DataManager.getManager(store.managerId) : null;
+                    
+                    const mName = manager ? manager.name.toLowerCase() : '';
+                    const sName = store ? store.name.toLowerCase() : '';
+                    const cId = channel ? channel.id.toString() : '';
+                    const scoreVal = Math.floor(ev.score).toString();
+
+                    const matchManager = this.state.searchManager === '' || mName.includes(this.state.searchManager.toLowerCase());
+                    const matchStore = this.state.searchStore === '' || sName.includes(this.state.searchStore.toLowerCase());
+                    const matchChannel = this.state.searchChannel === '' || cId === this.state.searchChannel;
+                    const matchScore = this.state.searchScore === '' || scoreVal.includes(this.state.searchScore);
+
+                    return matchManager && matchStore && matchChannel && matchScore;
+                });
+
+                tbody.innerHTML = evals.map(ev => {
+                    const store = DataManager.getStore(ev.storeId);
+                    const channel = DataManager.getChannel(ev.channelId);
+                    const badgeClass = Utils.getClassByScore(ev.score);
+                    const deleteBtn = isAdmin ? `<button class="btn btn-danger btn-sm" data-tooltip="Excluir" onclick="UISystem.confirm('Excluir Auditoria', 'Esta ação é irreversível.', () => { DataManager.deleteItem('evaluations', ${ev.id}); setTimeout(()=>HistoryController.render(), 300); })"><i class="ph ph-trash"></i></button>` : '';
+                    
+                    const viewBtn = `<button class="btn btn-secondary btn-sm" data-tooltip="Ver Detalhes" onclick="HistoryController.viewDetails(${ev.id})"><i class="ph ph-eye"></i></button>`;
+
+                    return `<tr><td>${Utils.formatDate(ev.date)}</td><td class="font-bold">${store ? store.name : 'Removida'}</td><td>${channel ? channel.name : '-'}</td><td><span class="badge badge-${badgeClass}">${Number(ev.score).toFixed(2)}%</span></td><td class="text-right"><div class="flex justify-end gap-2">${viewBtn}<button class="btn btn-outline btn-sm" data-tooltip="Imprimir Relatório" onclick="ReportController.generateAndPrint(DataManager.db.evaluations.find(e => e.id == ${ev.id}))"><i class="ph ph-printer"></i></button>${deleteBtn}</div></td></tr>`;
+                }).join('');
+            },
+
+            render() {
+                const channels = DataManager.db.channels;
+                return `
+                    <div class="card">
+                        <div class="flex justify-between items-center mb-4"><h3 class="font-bold">Histórico Completo</h3></div>
+                        
+                        <!-- Barra de Pesquisa/Filtros -->
+                        <div class="grid mb-4 gap-4" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); background: var(--bg-body); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                             <div class="form-group mb-0">
+                                <label class="form-label text-xs">Gestora</label>
+                                <input class="form-control text-sm" placeholder="Nome da gestora..." onkeyup="HistoryController.setFilter('searchManager', this.value)">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label text-xs">Loja</label>
+                                <input class="form-control text-sm" placeholder="Nome da loja..." onkeyup="HistoryController.setFilter('searchStore', this.value)">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label text-xs">Canal</label>
+                                <select class="form-control text-sm" onchange="HistoryController.setFilter('searchChannel', this.value)">
+                                    <option value="">Todos</option>
+                                    ${channels.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label text-xs">Nota Aprox.</label>
+                                <input class="form-control text-sm" type="number" placeholder="Ex: 100" onkeyup="HistoryController.setFilter('searchScore', this.value)">
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table>
+                                <thead><tr><th>Data</th><th>Loja</th><th>Canal</th><th>Nota</th><th class="text-right">Ações</th></tr></thead>
+                                <tbody id="history-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>`;
             },
             
             viewDetails(id) {
@@ -1213,6 +1324,8 @@
                 `;
                 
                 document.getElementById('modal-container').innerHTML = modalHtml;
+                // Preenche a lista após renderizar o template básico
+                setTimeout(() => this.refreshList(), 50);
             }
         };
 
@@ -1395,7 +1508,7 @@
                         const manager = DataManager.getManager(store.managerId);
                         document.getElementById('setup-manager-preview').value = manager ? manager.name : 'N/A';
                         document.getElementById('setup-manager-status').innerHTML = manager ? Utils.getStatusBadge(manager.status) : '-';
-                        if (manager && manager.status === 'Férias') { coveringGroup.classList.remove('hidden'); } else { coveringGroup.classList.add('hidden'); }
+                        if (manager && ['Férias', 'Atestado Medico', 'Licença Maternidade'].includes(manager.status)) { coveringGroup.classList.remove('hidden'); } else { coveringGroup.classList.add('hidden'); }
                     } else { coveringGroup.classList.add('hidden'); }
                 }
             },
@@ -1756,22 +1869,146 @@
         };
 
         const SettingsManagerController = {
-            render() { return GenericSettings.createTable('Gestoras (RH)', ['Nome', 'Status', 'Férias'], DataManager.db.managers, 'SettingsManagerController.openModal()', 'SettingsManagerController.openModal', 'DataManager.deleteItem(\'managers\',', (m, idx) => idx===0?`<b>${m.name}</b>`:idx===1?Utils.getStatusBadge(m.status):m.status==='Férias'?`${Utils.formatDate(m.vacationStart)} - ${Utils.formatDate(m.vacationEnd)}`:'-', 'settings-managers'); },
+            state: { searchTerm: '' },
+            render() {
+                // Filtro por nome
+                const managers = DataManager.db.managers.filter(m => 
+                    this.state.searchTerm === '' || 
+                    m.name.toLowerCase().includes(this.state.searchTerm.toLowerCase())
+                );
+
+                const tableHtml = `
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Nome</th><th>Status</th><th>Período Ausência</th><th class="text-right">Ações</th></tr></thead>
+                            <tbody>
+                                ${managers.map(m => `
+                                    <tr>
+                                        <td><b>${m.name}</b></td>
+                                        <td>${Utils.getStatusBadge(m.status)}</td>
+                                        <td>${['Férias', 'Atestado Medico', 'Licença Maternidade'].includes(m.status) ? `${Utils.formatDate(m.vacationStart)} - ${Utils.formatDate(m.vacationEnd)}` : '-'}</td>
+                                        <td class="text-right">
+                                            <button class="btn btn-outline btn-sm" onclick="SettingsManagerController.openModal(${m.id})"><i class="ph ph-pencil-simple"></i></button>
+                                            <button class="btn btn-danger btn-sm" onclick="UISystem.confirm('Excluir', 'Tem certeza?', () => { DataManager.deleteItem('managers', ${m.id}); setTimeout(()=>App.navigate('settings-managers'), 300); })"><i class="ph ph-trash"></i></button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+
+                return `
+                    <div class="card">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-bold">Gestoras (RH)</h3>
+                            <button class="btn btn-primary btn-sm" onclick="SettingsManagerController.openModal()"><i class="ph ph-plus"></i> Novo</button>
+                        </div>
+                        <div class="mb-4">
+                            <input class="form-control" placeholder="Pesquisar por nome..." value="${this.state.searchTerm}" onkeyup="SettingsManagerController.state.searchTerm=this.value; App.navigate('settings-managers')">
+                        </div>
+                        ${tableHtml}
+                    </div>`;
+            },
             openModal(id) {
                 const m = id ? DataManager.getManager(id) : {};
-                document.getElementById('modal-container').innerHTML = GenericSettings.modal(id?'Editar Gestora':'Nova Gestora', `<input type="hidden" id="mid" value="${m.id||''}"><div class="form-group"><label class="form-label">Nome</label><input class="form-control" id="mname" value="${m.name||''}"></div><div class="form-group"><label class="form-label">Status</label><select class="form-control" id="mstatus" onchange="document.getElementById('vacation-fields').style.display=this.value==='Férias'?'grid':'none'"><option value="Ativa" ${m.status==='Ativa'?'selected':''}>Ativa</option><option value="Férias" ${m.status==='Férias'?'selected':''}>Férias</option><option value="Desligada" ${m.status==='Desligada'?'selected':''}>Desligada</option></select></div><div id="vacation-fields" class="grid" style="grid-template-columns:1fr 1fr; gap:10px; display:${m.status==='Férias'?'grid':'none'};"><div class="form-group"><label class="form-label">Início</label><input type="date" class="form-control" id="vstart" value="${m.vacationStart||''}"></div><div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-control" id="vend" value="${m.vacationEnd||''}"></div></div>`, 'SettingsManagerController.save()');
+                const isAway = ['Férias', 'Atestado Medico', 'Licença Maternidade'].includes(m.status);
+                
+                document.getElementById('modal-container').innerHTML = GenericSettings.modal(id?'Editar Gestora':'Nova Gestora', `
+                    <input type="hidden" id="mid" value="${m.id||''}">
+                    <div class="form-group"><label class="form-label">Nome</label><input class="form-control" id="mname" value="${m.name||''}"></div>
+                    <div class="form-group">
+                        <label class="form-label">Status</label>
+                        <select class="form-control" id="mstatus" onchange="const v = ['Férias', 'Atestado Medico', 'Licença Maternidade'].includes(this.value); document.getElementById('vacation-fields').style.display = v ? 'grid' : 'none';">
+                            <option value="Ativa" ${m.status==='Ativa'?'selected':''}>Ativa</option>
+                            <option value="Férias" ${m.status==='Férias'?'selected':''}>Férias</option>
+                            <option value="Atestado Medico" ${m.status==='Atestado Medico'?'selected':''}>Atestado Médico</option>
+                            <option value="Licença Maternidade" ${m.status==='Licença Maternidade'?'selected':''}>Licença Maternidade</option>
+                            <option value="Desligada" ${m.status==='Desligada'?'selected':''}>Desligada</option>
+                        </select>
+                    </div>
+                    <div id="vacation-fields" class="grid" style="grid-template-columns:1fr 1fr; gap:10px; display:${isAway?'grid':'none'};">
+                        <div class="form-group"><label class="form-label">Início</label><input type="date" class="form-control" id="vstart" value="${m.vacationStart||''}"></div>
+                        <div class="form-group"><label class="form-label">Fim</label><input type="date" class="form-control" id="vend" value="${m.vacationEnd||''}"></div>
+                    </div>`, 
+                    'SettingsManagerController.save()'
+                );
             },
             async save() {
                 const id=document.getElementById('mid').value, name=document.getElementById('mname').value, status=document.getElementById('mstatus').value;
                 if(!name) return UISystem.toast("Preencha o nome", "error");
-                const obj = { id:id||undefined, name, status, vacationStart:status==='Férias'?document.getElementById('vstart').value:null, vacationEnd:status==='Férias'?document.getElementById('vend').value:null };
+                
+                const isAway = ['Férias', 'Atestado Medico', 'Licença Maternidade'].includes(status);
+                
+                const obj = { 
+                    id:id||undefined, 
+                    name, 
+                    status, 
+                    vacationStart: isAway ? document.getElementById('vstart').value : null, 
+                    vacationEnd: isAway ? document.getElementById('vend').value : null 
+                };
+                
                 if(id) await DataManager.updateItem('managers', obj); else await DataManager.addItem('managers', obj);
                 document.getElementById('modal-container').innerHTML=''; App.navigate('settings-managers');
             }
         };
 
         const SettingsStoreController = {
-            render() { return GenericSettings.createTable('Lojas', ['Loja', 'Cidade', 'Gestora'], DataManager.db.stores, 'SettingsStoreController.openModal()', 'SettingsStoreController.openModal', 'DataManager.deleteItem(\'stores\',', (s, idx) => idx===0?`<b>${s.code} - ${s.name}</b>`:idx===1?s.city:(DataManager.getManager(s.managerId)?.name || '-'), 'settings-stores'); },
+            state: { filterChannelId: '', filterManagerId: '' },
+            setFilter(key, val) { this.state[key] = val; App.navigate('settings-stores'); },
+            render() {
+                // Filtros
+                const stores = DataManager.db.stores.filter(s => {
+                    const matchChannel = this.state.filterChannelId === '' || s.channelId == this.state.filterChannelId;
+                    const matchManager = this.state.filterManagerId === '' || s.managerId == this.state.filterManagerId;
+                    return matchChannel && matchManager;
+                });
+
+                const tableHtml = `
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Loja</th><th>Cidade</th><th>Canal</th><th>Gestora</th><th class="text-right">Ações</th></tr></thead>
+                            <tbody>
+                                ${stores.map(s => {
+                                    const m = DataManager.getManager(s.managerId);
+                                    const c = DataManager.getChannel(s.channelId);
+                                    return `
+                                    <tr>
+                                        <td><b>${s.code} - ${s.name}</b></td>
+                                        <td>${s.city}</td>
+                                        <td>${c ? c.name : '-'}</td>
+                                        <td>${m ? m.name : '-'}</td>
+                                        <td class="text-right">
+                                            <button class="btn btn-outline btn-sm" onclick="SettingsStoreController.openModal(${s.id})"><i class="ph ph-pencil-simple"></i></button>
+                                            <button class="btn btn-danger btn-sm" onclick="UISystem.confirm('Excluir', 'Tem certeza?', () => { DataManager.deleteItem('stores', ${s.id}); setTimeout(()=>App.navigate('settings-stores'), 300); })"><i class="ph ph-trash"></i></button>
+                                        </td>
+                                    </tr>`;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+
+                return `
+                    <div class="card">
+                        <div class="flex justify-between items-center mb-4"><h3 class="font-bold">Lojas</h3><button class="btn btn-primary btn-sm" onclick="SettingsStoreController.openModal()"><i class="ph ph-plus"></i> Novo</button></div>
+                        <div class="flex gap-4 mb-4 flex-wrap bg-body p-4 rounded border">
+                             <div class="form-group mb-0" style="min-width: 200px;">
+                                <label class="form-label">Filtrar por Canal</label>
+                                <select class="form-control" onchange="SettingsStoreController.setFilter('filterChannelId', this.value)">
+                                    <option value="">Todos</option>
+                                    ${DataManager.db.channels.map(c => `<option value="${c.id}" ${this.state.filterChannelId == c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="form-group mb-0" style="min-width: 200px;">
+                                <label class="form-label">Filtrar por Gestora</label>
+                                <select class="form-control" onchange="SettingsStoreController.setFilter('filterManagerId', this.value)">
+                                    <option value="">Todas</option>
+                                    ${DataManager.db.managers.map(m => `<option value="${m.id}" ${this.state.filterManagerId == m.id ? 'selected' : ''}>${m.name}</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                        ${tableHtml}
+                    </div>`;
+            },
             openModal(id) {
                 const s = id ? DataManager.getStore(id) : {};
                 document.getElementById('modal-container').innerHTML = GenericSettings.modal(id?'Editar Loja':'Nova Loja', `<input type="hidden" id="sid" value="${s.id||''}"><div class="form-group"><label class="form-label">Nome</label><input class="form-control" id="sname" value="${s.name||''}"></div><div class="form-group"><label class="form-label">Código</label><input class="form-control" id="scode" value="${s.code||''}"></div><div class="form-group"><label class="form-label">Cidade</label><input class="form-control" id="scity" value="${s.city||''}"></div><div class="form-group"><label class="form-label">Canal</label><select class="form-control" id="schannel">${DataManager.db.channels.map(c=>`<option value="${c.id}" ${s.channelId==c.id?'selected':''}>${c.name}</option>`).join('')}</select></div><div class="form-group"><label class="form-label">Gestora</label><select class="form-control" id="smanager"><option value="">Selecione...</option>${DataManager.db.managers.map(m=>`<option value="${m.id}" ${s.managerId==m.id?'selected':''}>${m.name}</option>`).join('')}</select></div>`, 'SettingsStoreController.save()');
@@ -1800,7 +2037,38 @@
         };
 
         const SettingsIndicatorController = {
-            render() { return GenericSettings.createTable('Indicadores', ['Nome', 'Canal'], DataManager.db.indicators, 'SettingsIndicatorController.openModal()', 'SettingsIndicatorController.openModal', 'DataManager.deleteItem(\'indicators\',', (i, idx) => idx===0?`<b>${i.name}</b>`:DataManager.getChannel(i.channelId)?.name||'-', 'settings-indicators'); },
+            state: { filterChannelId: '' },
+            setFilter(val) { this.state.filterChannelId = val; App.navigate('settings-indicators'); },
+            render() {
+                 const indicators = DataManager.db.indicators.filter(i => 
+                    this.state.filterChannelId === '' || i.channelId == this.state.filterChannelId
+                );
+                
+                const tableHtml = `
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>Nome</th><th>Canal</th><th class="text-right">Ações</th></tr></thead>
+                            <tbody>
+                                ${indicators.map(i => `
+                                    <tr>
+                                        <td><b>${i.name}</b></td>
+                                        <td>${DataManager.getChannel(i.channelId)?.name || '-'}</td>
+                                        <td class="text-right">
+                                            <button class="btn btn-outline btn-sm" onclick="SettingsIndicatorController.openModal(${i.id})"><i class="ph ph-pencil-simple"></i></button>
+                                            <button class="btn btn-danger btn-sm" onclick="UISystem.confirm('Excluir', 'Tem certeza?', () => { DataManager.deleteItem('indicators', ${i.id}); setTimeout(()=>App.navigate('settings-indicators'), 300); })"><i class="ph ph-trash"></i></button>
+                                        </td>
+                                    </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+
+                return `
+                    <div class="card">
+                        <div class="flex justify-between items-center mb-4"><h3 class="font-bold">Indicadores</h3><button class="btn btn-primary btn-sm" onclick="SettingsIndicatorController.openModal()"><i class="ph ph-plus"></i> Novo</button></div>
+                        <div class="mb-4 bg-body p-4 rounded border"><label class="form-label">Filtrar por Canal</label><select class="form-control" style="max-width:300px;" onchange="SettingsIndicatorController.setFilter(this.value)"><option value="">Todos</option>${DataManager.db.channels.map(c=>`<option value="${c.id}" ${this.state.filterChannelId==c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>
+                        ${tableHtml}
+                    </div>`;
+            },
             openModal(id) {
                 const i = id ? DataManager.db.indicators.find(x=>x.id==id) : {};
                 document.getElementById('modal-container').innerHTML = GenericSettings.modal(id?'Editar':'Novo', `<input type="hidden" id="iid" value="${i.id||''}"><div class="form-group"><label class="form-label">Nome</label><input class="form-control" id="iname" value="${i.name||''}"></div><div class="form-group"><label class="form-label">Canal</label><select class="form-control" id="ichannel">${DataManager.db.channels.map(c=>`<option value="${c.id}" ${i.channelId==c.id?'selected':''}>${c.name}</option>`).join('')}</select></div>`, 'SettingsIndicatorController.save()');
